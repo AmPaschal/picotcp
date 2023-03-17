@@ -20,6 +20,10 @@
 
 #include <sys/poll.h>
 
+/* Function declarations for tap-net.c. To be extracter to a header file later */
+int tun_init( struct pico_device *dev );
+uint8_t output(void *uip_buf, int uip_len);
+
 struct pico_device_tap {
     struct pico_device dev;
     int fd;
@@ -53,7 +57,8 @@ static int tap_link_state(__attribute__((unused)) struct pico_device *self)
 static int pico_tap_send(struct pico_device *dev, void *buf, int len)
 {
     struct pico_device_tap *tap = (struct pico_device_tap *) dev;
-    return (int)write(tap->fd, buf, (uint32_t)len);
+    return output(buf, len);
+    // return (int)write(tap->fd, buf, (uint32_t)len);
 }
 
 static int pico_tap_poll(struct pico_device *dev, int loop_score)
@@ -192,7 +197,9 @@ struct pico_device *pico_tap_create(char *name)
     }
 
     tap->dev.overhead = 0;
-    tap->fd = tap_open(name);
+    tun_init((struct pico_device *) tap);
+    tap->fd = 0;
+    // tap->fd = tap_open(name);
     if (tap->fd < 0) {
         dbg("Tap creation failed.\n");
         pico_tap_destroy((struct pico_device *)tap);

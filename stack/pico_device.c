@@ -370,7 +370,7 @@ static int devloop(struct pico_device *dev, int loop_score, int direction)
 
     /* If device supports polling, give control. Loop score is managed internally,
      * remaining loop points are returned. */
-    loop_score = check_dev_serve_polling(dev, loop_score);
+    // loop_score = check_dev_serve_polling(dev, loop_score);
 
     if (direction == PICO_LOOP_DIR_OUT)
         loop_score = devloop_out(dev, loop_score);
