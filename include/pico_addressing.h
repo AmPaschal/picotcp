@@ -98,9 +98,9 @@ struct pico_802154
 enum pico_ll_mode
 {
     LL_MODE_ETHERNET = 0,
-#ifdef PICO_SUPPORT_802154
+// #ifdef PICO_SUPPORT_802154
     LL_MODE_IEEE802154,
-#endif
+// #endif
 };
 
 union pico_ll_addr

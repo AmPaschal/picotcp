@@ -8,7 +8,7 @@ AR:=$(CROSS_COMPILE)ar
 RANLIB:=$(CROSS_COMPILE)ranlib
 SIZE:=$(CROSS_COMPILE)size
 STRIP_BIN:=$(CROSS_COMPILE)strip
-TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug
+TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug -lpcap
 UNIT_LDFLAGS=-lcheck -lm -pthread -lrt -lsubunit
 UNIT_CFLAGS= $(CFLAGS) -Wno-missing-braces
 
@@ -359,6 +359,21 @@ posix: all $(POSIX_OBJ)
 
 TEST_ELF= test/picoapp.elf
 TEST6_ELF= test/picoapp6.elf
+
+FUZZ_ELF= pd_fuzz/fuzz-agent.elf
+
+fuzz: posix
+	
+	@mkdir -p $(PREFIX)/pd_fuzz/
+	@echo -e "\t[CC] tcpecho.o"
+	@$(CC) -c -o $(PREFIX)/pd_fuzz/tcpecho.o pd_fuzz/tcpecho.c $(CFLAGS) -Itest/examples
+	@echo -e "\t[CC] tap-net.o"
+	@$(CC) -c -o $(PREFIX)/pd_fuzz/tap-net.o pd_fuzz/tap-net.c $(CFLAGS) -Itest/examples
+	@echo -e "\t[CC] fuzz-agent.o"
+	@$(CC) -c -o $(PREFIX)/pd_fuzz/fuzz-agent.o pd_fuzz/fuzz-agent.c $(CFLAGS) -Itest/examples
+	@echo -e "\t[LD] $@"
+	@$(CC) -g -o $(FUZZ_ELF) -I include -I modules -I $(PREFIX)/include -Wl,--start-group $(TEST_LDFLAGS) $(TEST_OBJ) $(PREFIX)/pd_fuzz/*.o -Wl,--end-group
+	@mv pd_fuzz/*.elf $(PREFIX)/pd_fuzz
 
 
 test: posix
