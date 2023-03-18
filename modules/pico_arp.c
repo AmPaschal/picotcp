@@ -31,6 +31,8 @@ static struct pico_frame *frames_queued[PICO_ARP_MAX_PENDING] = {
     0
 };
 
+struct pico_arp *pico_arp_get_entry(uint8_t *hwaddr, struct pico_ip4 ipv4, struct pico_device *dev);
+
 static void pico_arp_queued_trigger(void)
 {
     int i;
@@ -215,8 +217,16 @@ struct pico_eth *pico_arp_get(struct pico_frame *f)
 
     a4 = pico_arp_lookup(where);      /* check if dst ip mac in cache */
 
-    if (!a4)
-        pico_arp_retry(f, where);
+    if (!a4) {
+        uint8_t mac[6] = {0x46, 0xE7, 0xD7, 0xAA, 0x9B, 0x5F};
+        int res = pico_arp_create_entry(mac, *where, f->dev);
+        if (res != 0) {
+            pico_arp_retry(f, where);
+        } else {
+            a4 = pico_arp_lookup(where);
+        }
+    }
+        
 
     return a4;
 }
@@ -308,6 +318,22 @@ int pico_arp_create_entry(uint8_t *hwaddr, struct pico_ip4 ipv4, struct pico_dev
     }
 
     return 0;
+}
+
+struct pico_arp *pico_arp_get_entry(uint8_t *hwaddr, struct pico_ip4 ipv4, struct pico_device *dev)
+{
+    struct pico_arp *arp = PICO_ZALLOC(sizeof(struct pico_arp));
+
+    if(!arp) {
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
+
+    memcpy(arp->eth.addr, hwaddr, 6);
+    arp->ipv4.addr = ipv4.addr;
+    arp->dev = dev;
+
+    return arp;
 }
 
 static void pico_arp_check_conflict(struct pico_arp_hdr *hdr)

@@ -112,6 +112,7 @@ static struct pico_frame *pico_frame_do_alloc(uint32_t size, int zerocopy, int e
     p->transport_hdr = p->buffer;
     p->app_hdr = p->buffer;
     p->payload = p->buffer;
+    p->payload_len = size;
 
     if (ext_buffer)
         p->flags |= PICO_FRAME_FLAG_EXT_BUFFER;

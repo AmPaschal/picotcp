@@ -73,7 +73,7 @@ static pcap_if_t * prvGetAvailableNetworkInterfaces( void );
 static const char * prvRemoveSpaces( char * pcBuffer,
                                      int aBuflen,
                                      const char * pcMessage );
-static int prvOpenSelectedNetworkInterface( pcap_if_t * pxAllNetworkInterfaces );
+static int prvOpenSelectedNetworkInterface( pcap_if_t * pxAllNetworkInterfaces, char **name );
 static int prvCreateWorkerThreads( void );
 static int prvSetDeviceModes( void );
 static void print_hex( unsigned const char * const bin_data,
@@ -92,7 +92,7 @@ static struct pico_device *pico_device;
  *        to be able to send and receive packets
  * @return pdPASS if successful else pdFAIL
  */
-int tun_init( struct pico_device *dev )
+int tun_init( struct pico_device *dev, char **name)
 {
     BaseType_t ret = pdFAIL;
     pcap_if_t * pxAllNetworkInterfaces;
@@ -104,7 +104,7 @@ int tun_init( struct pico_device *dev )
     if( pxAllNetworkInterfaces != NULL )
     {
         prvPrintAvailableNetworkInterfaces( pxAllNetworkInterfaces );
-        ret = prvOpenSelectedNetworkInterface( pxAllNetworkInterfaces );
+        ret = prvOpenSelectedNetworkInterface( pxAllNetworkInterfaces, name );
 
         if( ret == pdPASS )
         {
@@ -431,7 +431,7 @@ static int prvOpenInterface( const char * pucName )
  * @param [in] pxAllNetworkInterfaces network interface list to choose from
  * @returns pdPASS on success or pdFAIL when something goes wrong
  */
-static int prvOpenSelectedNetworkInterface( pcap_if_t * pxAllNetworkInterfaces )
+static int prvOpenSelectedNetworkInterface( pcap_if_t * pxAllNetworkInterfaces, char **name)
 {
     int ret = pdFAIL;
 
@@ -452,6 +452,10 @@ static int prvOpenSelectedNetworkInterface( pcap_if_t * pxAllNetworkInterfaces )
     {
         printf("Failed to open interface %s.\n", interface_name);
     }
+
+    *name = interface_name;
+ 
+    printf("Device name: %s...\n", *name);
 
     return ret;
 }
@@ -556,8 +560,7 @@ static void pcap_callback( unsigned char * user,
                            const struct pcap_pkthdr * pkt_header,
                            const u_char * pkt_data )
 {
-    printf( "Receiving < ===========  network callback user: %s len: %d caplen: %d\n",
-                             user,
+    printf( "Receiving < ===========  network callback len: %d caplen: %d\n",
                              pkt_header->len,
                              pkt_header->caplen );
     print_hex( pkt_data, pkt_header->len );

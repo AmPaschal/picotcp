@@ -365,10 +365,10 @@ FUZZ_ELF= pd_fuzz/fuzz-agent.elf
 fuzz: posix
 	
 	@mkdir -p $(PREFIX)/pd_fuzz/
-	@echo -e "\t[CC] tcpecho.o"
-	@$(CC) -c -o $(PREFIX)/pd_fuzz/tcpecho.o pd_fuzz/tcpecho.c $(CFLAGS) -Itest/examples
 	@echo -e "\t[CC] tap-net.o"
 	@$(CC) -c -o $(PREFIX)/pd_fuzz/tap-net.o pd_fuzz/tap-net.c $(CFLAGS) -Itest/examples
+	@echo -e "\t[CC] wait_for_event.o"
+	@$(CC) -c -o $(PREFIX)/pd_fuzz/wait_for_event.o pd_fuzz/wait_for_event.c $(CFLAGS) -Itest/examples
 	@echo -e "\t[CC] fuzz-agent.o"
 	@$(CC) -c -o $(PREFIX)/pd_fuzz/fuzz-agent.o pd_fuzz/fuzz-agent.c $(CFLAGS) -Itest/examples
 	@echo -e "\t[LD] $@"

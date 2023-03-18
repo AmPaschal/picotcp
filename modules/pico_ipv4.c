@@ -51,7 +51,8 @@ static struct pico_queue out = {
 /* Functions */
 static int ipv4_route_compare(void *ka, void *kb);
 static struct pico_frame *pico_ipv4_alloc(struct pico_protocol *self, struct pico_device *dev, uint16_t size);
-
+uint8_t output(void *uip_buf, int uip_len);
+uint8_t checkFuzzTerminatingSignal(uint8_t * ethernetBuffer, uint8_t uip_len);
 
 int pico_ipv4_compare(struct pico_ip4 *a, struct pico_ip4 *b)
 {
@@ -344,6 +345,13 @@ static int pico_ipv4_process_local_unicast_in(struct pico_frame *f)
         .address = {.addr = PICO_IP4_ANY}, .dev = NULL
     };
     if (pico_ipv4_link_find(&hdr->dst)) {
+        // This packet is for us, we check if it's a terminating signal
+        printf("Payload length: %d..\n", f->payload_len);
+        if (checkFuzzTerminatingSignal(f->payload, f->payload_len)) {
+            pico_frame_discard(f);
+            return 1;
+        }
+
         if (pico_ipv4_nat_inbound(f, &hdr->dst) == 0)
             pico_enqueue(pico_proto_ipv4.q_in, f); /* dst changed, reprocess */
         else
@@ -1584,6 +1592,52 @@ static int pico_ipv4_forward_check_dev(struct pico_frame *f)
     }
 
     return 0;
+}
+
+uint8_t checkFuzzTerminatingSignal(uint8_t * ethernetBuffer, uint8_t uip_len) {
+    
+    uint8_t termination_payload[5] = {0x11, 0x22, 0x11, 0x33, 0x44};
+
+    uint8_t termination_payload_offset = sizeof(struct pico_eth_hdr) + sizeof(struct pico_ipv4_hdr) + sizeof(struct pico_udp_hdr);
+
+    // We confirm packet contains termination payload
+    if (uip_len < termination_payload_offset + sizeof(termination_payload)) {
+        return 0;
+    }
+
+    uint8_t comparisonBytes[5];
+    memcpy(comparisonBytes, ethernetBuffer + termination_payload_offset, sizeof(termination_payload));            // Get destination port field
+    
+    if (memcmp(comparisonBytes, termination_payload, sizeof(termination_payload)) != 0) {
+        // The extracted bytes are not equal
+        return 0;
+    }
+
+    printf("PicoTCP receives terminating signal...\n");
+
+    // TODO: Need to make this dynamic to IPv6/IPv4 and TAP/TUN
+    // swap mac address in ethernet header of ethernetBuffer
+    uint8_t destinationMac[6];
+    memcpy(destinationMac, ethernetBuffer, 6);
+    memcpy(ethernetBuffer, ethernetBuffer + 6, 6);
+    memcpy(ethernetBuffer + 6, destinationMac, 6);
+
+    // swap IP address in IPv4 header of ethernetBuffer
+    uint8_t ipAddress[4];
+    memcpy(ipAddress, ethernetBuffer + 26, 4);
+    memcpy(ethernetBuffer + 26, ethernetBuffer + 30, 4);
+    memcpy(ethernetBuffer + 30, ipAddress, 4);
+
+    // swap UDP ports in UDP header of ethernetBuffer
+    uint8_t udpPorts[2];
+    memcpy(udpPorts, ethernetBuffer + 34, 2);
+    memcpy(ethernetBuffer + 34, ethernetBuffer + 36, 2);
+    memcpy(ethernetBuffer + 36, udpPorts, 2);
+
+    // Send directly to network interface
+    // TODO: Maybe, we may find neater ways of sending this through the stack
+    output(ethernetBuffer, uip_len);
+    return 1;
 }
 
 static int pico_ipv4_forward(struct pico_frame *f)

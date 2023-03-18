@@ -21,7 +21,7 @@
 #include <sys/poll.h>
 
 /* Function declarations for tap-net.c. To be extracter to a header file later */
-int tun_init( struct pico_device *dev );
+int tun_init( struct pico_device *dev, char *name );
 uint8_t output(void *uip_buf, int uip_len);
 
 struct pico_device_tap {
@@ -63,23 +63,23 @@ static int pico_tap_send(struct pico_device *dev, void *buf, int len)
 
 static int pico_tap_poll(struct pico_device *dev, int loop_score)
 {
-    struct pico_device_tap *tap = (struct pico_device_tap *) dev;
-    struct pollfd pfd;
-    unsigned char buf[TUN_MTU];
-    int len;
-    pfd.fd = tap->fd;
-    pfd.events = POLLIN;
-    do  {
-        if (poll(&pfd, 1, 0) <= 0) {
-            return loop_score;
-        }
+    // struct pico_device_tap *tap = (struct pico_device_tap *) dev;
+    // struct pollfd pfd;
+    // unsigned char buf[TUN_MTU];
+    // int len;
+    // pfd.fd = tap->fd;
+    // pfd.events = POLLIN;
+    // do  {
+    //     if (poll(&pfd, 1, 0) <= 0) {
+    //         return loop_score;
+    //     }
 
-        len = (int)read(tap->fd, buf, TUN_MTU);
-        if (len > 0) {
-            loop_score--;
-            pico_stack_recv(dev, buf, (uint32_t)len);
-        }
-    } while(loop_score > 0);
+    //     len = (int)read(tap->fd, buf, TUN_MTU);
+    //     if (len > 0) {
+    //         loop_score--;
+    //         pico_stack_recv(dev, buf, (uint32_t)len);
+    //     }
+    // } while(loop_score > 0);
     return 0;
 }
 
@@ -177,12 +177,14 @@ static int tap_get_mac(char *name, uint8_t *mac)
 }
 #endif
 
-struct pico_device *pico_tap_create(char *name)
+struct pico_device *pico_tap_create()
 {
     struct pico_device_tap *tap = PICO_ZALLOC(sizeof(struct pico_device_tap));
-    uint8_t mac[6] = {};
+    // TODO: Hardcode MAC address here
+    uint8_t mac[6] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x41};
     struct sigaction sa;
-
+    char *name;
+    
     if (!tap) {
         return NULL;
     }
@@ -197,30 +199,14 @@ struct pico_device *pico_tap_create(char *name)
     }
 
     tap->dev.overhead = 0;
-    tun_init((struct pico_device *) tap);
+    tun_init((struct pico_device *) tap, &name);
     tap->fd = 0;
-    // tap->fd = tap_open(name);
+    
     if (tap->fd < 0) {
         dbg("Tap creation failed.\n");
         pico_tap_destroy((struct pico_device *)tap);
         return NULL;
     }
-
-    /* Host's mac address is generated * by the host kernel and is
-     * retrieved via tap_get_mac().
-     */
-    if (tap_get_mac(name, mac) < 0) {
-        dbg("Tap mac query failed.\n");
-        pico_tap_destroy((struct pico_device *)tap);
-        return NULL;
-    }
-
-    /* To act as a second endpoint in the same subnet, the picoTCP
-     * app using the tap device must have a different mac address.
-     * For simplicity, we just add 1 to the last byte of the linux
-     * endpoint so the two addresses are consecutive.
-     */
-    mac[5]++;
 
     if( 0 != pico_device_init((struct pico_device *)tap, name, mac)) {
         dbg("Tap init failed.\n");
