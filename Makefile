@@ -67,7 +67,7 @@ POLARSSL?=0
 #IPv6 related
 IPV6?=1
 
-TEST?=0
+TEST?=1
 ifeq ($(TEST),1)
 	6LOWPAN=1
 	IEEE802154=1
