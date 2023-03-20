@@ -99,8 +99,9 @@ static int flag = 0;
 static char recvbuf[BSIZE];
 static int pos = 0, len = 0;
 
- const time_t xMaxMSToWait = 500000;
-struct event * pvSendEvent = NULL;
+const time_t xMaxMSToWait = 500000;
+struct event * pvAcceptEvent = NULL;
+struct event * pvReadEvent = NULL;
 
 struct pico_ip4 inaddr_any = {
     0
@@ -189,27 +190,20 @@ void fuzz_agent_cb(uint16_t ev, struct pico_socket *s)
         if (flag & PICO_SOCK_EV_CLOSE)
             printf("SOCKET> EV_RD, FIN RECEIVED\n");
 
-        while (len < BSIZE) {
-            r = pico_socket_read(s, recvbuf + len, BSIZE - len);
-            if (r > 0) {
-                len += r;
-                flag &= ~(PICO_SOCK_EV_RD);
-            } else {
-                flag |= PICO_SOCK_EV_RD;
-                break;
-            }
-        }
-        if (flag & PICO_SOCK_EV_WR) {
-            flag &= ~PICO_SOCK_EV_WR;
-            send_tcpecho(s);
-        }
+        // printf("Received PICO_SOCK_EV_RD signal...\n");
+        ecData.pending_data = 1;
+        ecData.event = PICO_SOCK_EV_RD;
+        ecData.sock = s;
+        event_signal(pvReadEvent);
     }
 
     if (ev & PICO_SOCK_EV_CONN) {
         // TODO: Send signal to main thread
-        ecData.pending_data = 1;
-        ecData.event = PICO_SOCK_EV_CONN;
-        event_signal(pvSendEvent);
+        printf("Received PICO_SOCK_EV_CONN signal...\n");
+        acceptEventData.pending_data = 1;
+        acceptEventData.event = PICO_SOCK_EV_CONN;
+        acceptEventData.sock = s;
+        event_signal(pvAcceptEvent);
     }
 
     if (ev & PICO_SOCK_EV_FIN) {
@@ -231,11 +225,7 @@ void fuzz_agent_cb(uint16_t ev, struct pico_socket *s)
     }
 
     if (ev & PICO_SOCK_EV_WR) {
-        r = send_tcpecho(s);
-        if (r == 0)
-            flag |= PICO_SOCK_EV_WR;
-        else
-            flag &= (~PICO_SOCK_EV_WR);
+        // printf("Received PICO_SOCK_EV_WR signal...\n");
     }
 }
 
@@ -265,7 +255,8 @@ int main(int argc, char **argv)
 
     pico_stack_init();
 
-    pvSendEvent = event_create();
+    pvAcceptEvent = event_create();
+    pvReadEvent = event_create();
 
     struct pico_device *dev = NULL;
     struct pico_ip4 addr4 = {
@@ -386,7 +377,7 @@ int main(int argc, char **argv)
 
         printf("Packetdrill command received: %s\n", syscallPackage.syscallId);
 
-        int8_t response = -1;
+        int response = -1;
 
         if (strcmp(syscallPackage.syscallId, "socket_create") == 0) {
             /* Create a TCP socket. */
@@ -487,14 +478,14 @@ int main(int argc, char **argv)
                 goto returnResult;
             }
 
-            if (ecData.pending_data != 1 || ecData.event != PICO_SOCK_EV_CONN) { // Socket hasn't connected yet
+            if (acceptEventData.pending_data != 1 || acceptEventData.event != PICO_SOCK_EV_CONN) { // Socket hasn't connected yet
                 printf("About to yield in accept...\n");
-                event_wait_timed(pvSendEvent, xMaxMSToWait);
+                event_wait_timed(pvAcceptEvent, xMaxMSToWait);
             }
 
             printf("Waking up from yield...\n");
 
-            if (ecData.event == PICO_SOCK_EV_CONN) {
+            if (acceptEventData.event == PICO_SOCK_EV_CONN) {
 
                 uint32_t ka_val = 0;
                 int ipAddrLen = IPV6_MODE ? sizeof (struct pico_ip6) : sizeof (struct pico_ip6);
@@ -556,8 +547,7 @@ int main(int argc, char **argv)
                 syscallResponse.result = response;
                 syscallResponse.acceptResponse = acceptResponse;
 
-                ecData.pending_data = 0;
-                memset(&ecData, 0, sizeof(struct EventCallbackData));
+                memset(&acceptEventData, 0, sizeof(struct EventCallbackData));
             } else {
                 syscallResponse.result = -1;
             }
@@ -588,22 +578,20 @@ int main(int argc, char **argv)
             
         } else if (strcmp(syscallPackage.syscallId, "socket_write") == 0) {
 
-            // struct WritePackage writePackage = syscallPackage.writePackage;
+            struct WritePackage writePackage = syscallPackage.writePackage;
 
-            // struct ContikiSocket xSocket = socketArray[writePackage.sockfd];
+            struct ContikiSocket xSocket = socketArray[writePackage.sockfd];
 
-            // int writeResult = -1;
-            // if (xSocket.initialized == SOCKET_TCP) {
-            //     writeResult = tcp_socket_send(xSocket.tcp_conn, syscallPackage.buffer, syscallPackage.bufferedCount);
-            // } 
+            if (xSocket.initialized == 0) {
+                printf("Socket not found...\n");
+                goto returnResult;
+            }
 
-            // syscallResponse.result = writeResult;
+            response = pico_socket_write(xSocket.tcp_conn, syscallPackage.buffer, syscallPackage.bufferedCount); 
 
-            // if (writeResult < 0) {
-            //     printf("Error writing to socket with response: %d\n", writeResult);
-            // } else {
-            //     PROCESS_PAUSE();
-            // }
+            if (response <= 0) {
+                printf("Error writing to socket with response: %d\n", response);
+            } 
             
         } else if (strcmp(syscallPackage.syscallId, "socket_sendto") == 0) {
 
@@ -628,24 +616,27 @@ int main(int argc, char **argv)
             // syscallResponse.result = writeResult;
         } else if (strcmp(syscallPackage.syscallId, "socket_read") == 0) {
 
-            // if (rxData.pending_data != 1) {
-            //     printf("About to yield...\n");
-            //     PROCESS_WAIT_EVENT();
-            // }
+            struct ReadPackage readPackage = syscallPackage.readPackage;
+            struct ContikiSocket xSocket = socketArray[readPackage.sockfd];
 
-            // printf("Just woke up from yielding...\n");
+            if (xSocket.initialized == 0) {
+                printf("Socket not found...\n");
+                goto returnResult;
+            }
 
-            // // For our fuzz testing, we assume only one socket would receive data, the one we are trying to read from
-            // struct ReadPackage readPackage = syscallPackage.readPackage;
-            // struct ContikiSocket xSocket = socketArray[readPackage.sockfd];
+            if (ecData.pending_data != 1 || ecData.event != PICO_SOCK_EV_RD) { // Socket hasn't connected yet
+                printf("About to yield in read...\n");
+                event_wait_timed(pvReadEvent, xMaxMSToWait);
+            }
 
-            // if (rxData.pending_data == 1 && xSocket.tcp_conn->listen_port == rxData.tcp_sock->listen_port) {
-            //     syscallResponse.result = rxData.datalen;
-            //     memset(&rxData, 0, sizeof(struct RxCallbackData));
-            //     rxData.pending_data = 0;
-            // } else {
-            //     syscallResponse.result = 0;
-            // }
+            printf("Just woke up from yielding with data: %d and event: %d...\n", ecData.pending_data, ecData.event);
+
+            if (ecData.pending_data == 1 && ecData.event == PICO_SOCK_EV_RD) {
+
+                char recvbuf[BSIZE];
+
+                response = pico_socket_read(xSocket.tcp_conn, recvbuf, readPackage.count);
+            } 
 
         } else if (strcmp(syscallPackage.syscallId, "socket_recvfrom") == 0) {
 
@@ -677,20 +668,21 @@ int main(int argc, char **argv)
 
         } else if (strcmp(syscallPackage.syscallId, "socket_close") == 0){
 
-            // struct ClosePackage closePackage = syscallPackage.closePackage;
+            struct ClosePackage closePackage = syscallPackage.closePackage;
 
-            // struct ContikiSocket xSocket = socketArray[closePackage.sockfd];
+            struct ContikiSocket xSocket = socketArray[closePackage.sockfd];
 
-            // int closeResult = -1;
-            // if (xSocket.initialized == SOCKET_TCP) {
-            //     closeResult = tcp_socket_close(xSocket.tcp_conn);
-            // }
+            if (xSocket.initialized == 0) {
+                printf("Socket not found...\n");
+                goto returnResult;
+            }
 
-            // if (closeResult != 0) {
-            //     printf("Error closing socket with response: %d\n", closeResult);
-            // }
+            response = pico_socket_close(xSocket.tcp_conn);
 
-            // syscallResponse.result = closeResult == 1 ? 0 : -1;
+            if (response != 0) {
+                printf("Error closing socket with response: %d\n", response);
+            }
+
         } else if (strcmp(syscallPackage.syscallId, "freertos_init") == 0){
 
             response = resetPacketDrillTask();
@@ -701,6 +693,7 @@ int main(int argc, char **argv)
 
         returnResult:
 
+        memset(&ecData, 0, sizeof(struct EventCallbackData));
         syscallResponse.result = response;
 
         printf("Syscall response buffer received: %d...\n", syscallResponse.result);

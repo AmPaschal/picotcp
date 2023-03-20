@@ -574,7 +574,6 @@ static void pcap_callback( unsigned char * user,
         uint32_t uip_len = pkt_header->len;
 
         memcpy(uip_buf, pkt_data, uip_len);
-        ASAN_POISON_MEMORY_REGION(uip_buf + uip_len, TUN_MTU - uip_len);
         printf("TUN data incoming read: %d\n", uip_len);
 
         pico_stack_recv(pico_device, uip_buf, uip_len);

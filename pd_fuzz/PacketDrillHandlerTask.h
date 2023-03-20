@@ -60,9 +60,11 @@ int socketCounter = 3;
 struct EventCallbackData {
     uint8_t pending_data;
     uint8_t event;
+    struct pico_socket *sock;
 };
 
 static struct EventCallbackData ecData;
+static struct EventCallbackData acceptEventData;
 
 
 struct SocketPackage {
@@ -91,7 +93,7 @@ struct ListenPackage {
 
 struct WritePackage {
     int sockfd;
-    int count;
+    size_t count;
 };
 
 struct SendToPackage {
@@ -106,7 +108,7 @@ struct SendToPackage {
 
 struct ReadPackage {
     int sockfd;
-    int count;
+    size_t count;
 };
 
 struct RecvFromPackage {
@@ -139,7 +141,7 @@ struct SyscallResponsePackage {
 struct SyscallPackage {
     char syscallId[20];
     int bufferedMessage;
-    int bufferedCount;
+    size_t bufferedCount;
     void *buffer;
     union {
         struct SocketPackage socketPackage;

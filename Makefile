@@ -175,6 +175,10 @@ ifeq ($(ARCH),arm9)
 endif
 
 ifeq ($(ADDRESS_SANITIZER),1)
+  CFLAGS+=-fsanitize=address -fno-omit-frame-pointer
+endif
+
+ifeq ($(ADDRESS_SANITIZER),1)
   TEST_LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer
 endif
 

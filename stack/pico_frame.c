@@ -13,6 +13,9 @@
 #include "pico_stack.h"
 #include "pico_socket.h"
 
+// ASAN header
+#include <sanitizer/asan_interface.h>
+
 #ifdef PICO_SUPPORT_DEBUG_MEMORY
 static int n_frames_allocated;
 #endif
@@ -81,7 +84,7 @@ static struct pico_frame *pico_frame_do_alloc(uint32_t size, int zerocopy, int e
         unsigned int align = size % sizeof(uint32_t);
         /* Ensure that usage_count starts on an aligned address */
         if (align) {
-            frame_buffer_size += (uint32_t)sizeof(uint32_t) - align;
+            frame_buffer_size += 4 + (uint32_t)sizeof(uint32_t) - align; // We add 4 here to increase the space that will be poisoned. It seems ASAN posioning doesn't work with only 2 bytes
         }
 
         p->buffer = PICO_ZALLOC((size_t)frame_buffer_size + sizeof(uint32_t));
@@ -91,6 +94,15 @@ static struct pico_frame *pico_frame_do_alloc(uint32_t size, int zerocopy, int e
         }
 
         p->usage_count = (uint32_t *)(((uint8_t*)p->buffer) + frame_buffer_size);
+
+        /* We poison unused space in the buffer */
+        if (align) {
+            ASAN_POISON_MEMORY_REGION( p->buffer + size, frame_buffer_size - size); // We shouldn't poison up to align bytes
+            dbg("Poisoning memory address %p to %p\n",  p->buffer + size,  p->buffer + frame_buffer_size);
+        }
+
+        dbg("buffer: %p, size: %d, align: %d \n", p->buffer, size, align);
+        
     } else {
         p->buffer = NULL;
         p->flags |= PICO_FRAME_FLAG_EXT_USAGE_COUNTER;
