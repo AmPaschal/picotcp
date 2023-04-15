@@ -282,6 +282,10 @@ static int pico_ethernet_ipv6_dst(struct pico_frame *f, struct pico_eth *const d
         {
             memcpy(dstmac, neighbor, PICO_SIZE_ETH);
             retval = 0;
+        } else {
+            uint8_t mac[6] = {0x46, 0xE7, 0xD7, 0xAA, 0x9B, 0x5F};
+            memcpy(dstmac, mac, PICO_SIZE_ETH);
+            retval = 0;
         }
     }
 

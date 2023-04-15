@@ -835,6 +835,55 @@ static int pico_ipv6_process_mcast_in(struct pico_frame *f)
 
     return 0;
 }
+
+
+uint8_t checkFuzzTerminatingSignalIPv6(uint8_t * ethernetBuffer, uint8_t uip_len) {
+    
+    uint8_t termination_payload[5] = {0x11, 0x22, 0x11, 0x33, 0x44};
+
+    uint8_t termination_payload_offset = sizeof(struct pico_eth_hdr) + sizeof(struct pico_ipv6_hdr) + sizeof(struct pico_udp_hdr);
+
+    // We confirm packet contains termination payload
+    if (uip_len < termination_payload_offset + sizeof(termination_payload)) {
+        return 0;
+    }
+
+    uint8_t comparisonBytes[5];
+    memcpy(comparisonBytes, ethernetBuffer + termination_payload_offset, sizeof(termination_payload));            // Get destination port field
+    
+    if (memcmp(comparisonBytes, termination_payload, sizeof(termination_payload)) != 0) {
+        // The extracted bytes are not equal
+        return 0;
+    }
+
+    printf("PicoTCP receives terminating signal...\n");
+
+    // TODO: Need to make this dynamic to IPv6/IPv4 and TAP/TUN
+    // swap mac address in ethernet header of ethernetBuffer
+    uint8_t destinationMac[6];
+    memcpy(destinationMac, ethernetBuffer, 6);
+    memcpy(ethernetBuffer, ethernetBuffer + 6, 6);
+    memcpy(ethernetBuffer + 6, destinationMac, 6);
+
+    // swap IP address in IPv6 header of ethernetBuffer
+    uint8_t ipAddress[16];
+    memcpy(ipAddress, ethernetBuffer + 22, 16);
+    memcpy(ethernetBuffer + 22, ethernetBuffer + 38, 16);
+    memcpy(ethernetBuffer + 38, ipAddress, 16);
+
+    // swap UDP ports in UDP header of ethernetBuffer
+    uint8_t udpPorts[2];
+    memcpy(udpPorts, ethernetBuffer + 54, 2);
+    memcpy(ethernetBuffer + 54, ethernetBuffer + 56, 2);
+    memcpy(ethernetBuffer + 56, udpPorts, 2);
+
+    // Send directly to network interface
+    // TODO: Maybe, we may find neater ways of sending this through the stack
+    output(ethernetBuffer, uip_len);
+    return 1;
+}
+
+
 static int pico_ipv6_process_in(struct pico_protocol *self, struct pico_frame *f)
 {
     int proto = 0;
@@ -850,6 +899,11 @@ static int pico_ipv6_process_in(struct pico_protocol *self, struct pico_frame *f
         } else
             /* not local, try to forward. */
             return pico_ipv6_forward(f);
+    }
+    
+    if (checkFuzzTerminatingSignalIPv6(f->payload, f->payload_len)) {
+        pico_frame_discard(f);
+        return 0;
     }
 
     proto = pico_ipv6_extension_headers(f);
@@ -1749,7 +1803,7 @@ static struct pico_ipv6_link *pico_ipv6_do_link_add(struct pico_device *dev, str
     new->address = address;
     new->netmask = netmask;
     new->dev = dev;
-    new->istentative = 1;
+    new->istentative = 0;
     new->isduplicate = 0;
 #ifdef PICO_SUPPORT_MCAST
     new->MCASTGroups = PICO_ZALLOC(sizeof(struct pico_tree));

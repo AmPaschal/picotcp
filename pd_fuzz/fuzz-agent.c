@@ -287,8 +287,8 @@ int main(int argc, char **argv)
     if (IPV6_MODE) {
         printf("Testing this gets called 2...\n");
         struct pico_ip6 ipaddr6 = {{0}}, netmask6 = {{0}}, gateway6 = {{0}}, zero6 = {{0}};
-        pico_string_to_ipv6("fb00::302:304:506:708", ipaddr6.addr);
-        pico_string_to_ipv6("fb00::302:304:506:0", netmask6.addr);
+        pico_string_to_ipv6("fc00::302:304:506:708", ipaddr6.addr);
+        pico_string_to_ipv6("ffff:ffff:ffff:ffff:0000:0000:0000:0000", netmask6.addr);
         pico_ipv6_link_add(dev, ipaddr6, netmask6);
         
 
@@ -391,7 +391,7 @@ int main(int argc, char **argv)
             // TODO: Make the IP version and protocol configurable
             int ipVersion = socketPackage.domain == AF_INET ? PICO_PROTO_IPV4 : PICO_PROTO_IPV6;
             int protocol = socketPackage.type = SOCK_STREAM ? PICO_PROTO_TCP : PICO_PROTO_UDP;
-            struct pico_socket *tcp_socket = pico_socket_open(PICO_PROTO_IPV4, PICO_PROTO_TCP, &fuzz_agent_cb);
+            struct pico_socket *tcp_socket = pico_socket_open(ipVersion, protocol, &fuzz_agent_cb);
             printf("Socket %p opened...\n", tcp_socket);
 
             if (tcp_socket != NULL) {
