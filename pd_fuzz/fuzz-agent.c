@@ -93,7 +93,7 @@ struct pico_ip_mreq_source ZERO_MREQ_SRC_IP6 = {
 
 /* #define PICOAPP_IPFILTER 1 */
 
-int IPV6_MODE;
+int IPV6_MODE = 1;
 static int flag = 0;
 #define BSIZE (1024 * 10)
 static char recvbuf[BSIZE];
@@ -282,11 +282,13 @@ int main(int argc, char **argv)
     pico_ipv4_link_add(dev, ipaddr, netmask);
     bcastAddr.addr = (ipaddr.addr) | (~netmask.addr);
 
+    printf("Testing this gets called 1...\n");
 #ifdef PICO_SUPPORT_IPV6
     if (IPV6_MODE) {
+        printf("Testing this gets called 2...\n");
         struct pico_ip6 ipaddr6 = {{0}}, netmask6 = {{0}}, gateway6 = {{0}}, zero6 = {{0}};
-        pico_string_to_ipv6("addr", ipaddr6.addr);
-        pico_string_to_ipv6("nm", netmask6.addr);
+        pico_string_to_ipv6("fb00::302:304:506:708", ipaddr6.addr);
+        pico_string_to_ipv6("fb00::302:304:506:0", netmask6.addr);
         pico_ipv6_link_add(dev, ipaddr6, netmask6);
         
 

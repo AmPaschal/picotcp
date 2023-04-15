@@ -1607,7 +1607,7 @@ int pico_ipv6_route_add(struct pico_ip6 address, struct pico_ip6 netmask, struct
 		return -1;
 	}
 
-    pico_ipv6_dbg_route();
+    // pico_ipv6_dbg_route();
     return 0;
 }
 
