@@ -288,6 +288,25 @@ struct pico_frame *pico_frame_deepcopy(struct pico_frame *f)
     return new;
 }
 
+static inline uint32_t pico_checksum_adder
+    (uint32_t sum, void *data, uint32_t len)
+{
+    // ...
+
+    if (len & 0x01) {
+        --len;
+        sum += ((uint8_t *)data)[len];
+    }
+
+    stop = (uint16_t *)(((uint8_t *)data) + len);
+
+    while (buf < stop) {
+        sum += *buf++;
+    }
+
+    return sum;
+}
+
 
 static inline uint32_t pico_checksum_adder(uint32_t sum, void *data, uint32_t len)
 {
